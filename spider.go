@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 )
 
 func main() {
@@ -18,6 +19,35 @@ func main() {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	getMaxPagesNum := regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
+
+	// 获取文章列表总页数
+	buf := getMaxPagesNum.FindStringSubmatch(string(body))
+	maxPagesNum, err := strconv.Atoi(buf[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := 0; i < maxPagesNum; i++ {
+		err = getPagesList(i + 1)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+	}
+}
+
+func getPagesList(pageNum int) error {
+	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=139&orderby=dateline&page=" + strconv.Itoa(pageNum))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
 	}
 	/*
 		<tbody id="normalthread_233212">
@@ -52,4 +82,6 @@ func main() {
 	for _, v := range m {
 		fmt.Println(v[1:])
 	}
+
+	return nil
 }
