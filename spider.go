@@ -1,45 +1,64 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
+	"time"
+)
+
+var (
+	// 用于获取帖子信息
+	getPage = regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="new">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em><span>([^<]+)</span></em>\n</td>\n(?:<[^\n]+>\n){7}`)
+
+	// 用于获取帖子列表总页数
+	getMaxPagesNum = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
+
+	// 用于判断时间格式
+	day                = regexp.MustCompile(`[0-9]+-[0-9]+-[0-9]+`)
+	yesterday          = regexp.MustCompile(`昨天.*`)
+	dayBeforeYesterday = regexp.MustCompile(`前天.*`)
+	xDaysAgo           = regexp.MustCompile(`([0-9]).*天前`)
 )
 
 func main() {
-	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=139&orderby=dateline&page=1")
+	fid := "139"
+	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=1")
 	if err != nil {
-		log.Fatal(err)
+		printError("GetPage", err)
+		os.Exit(1)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		printError("ReadAll", err)
+		os.Exit(1)
 	}
 
-	getMaxPagesNum := regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
-
-	// 获取文章列表总页数
+	// 获取帖子列表总页数
 	buf := getMaxPagesNum.FindStringSubmatch(string(body))
 	maxPagesNum, err := strconv.Atoi(buf[1])
 	if err != nil {
-		log.Fatal(err)
+		printError("Atoi", err)
+		os.Exit(1)
 	}
+	// 获取每一页的所有帖子
 	for i := 0; i < maxPagesNum; i++ {
-		err = getPagesList(i + 1)
+		err = getPagesList(fid, i+1)
 		if err != nil {
-			log.Println(err)
+			printError("getPagesList"+string(i), err)
 			return
 		}
 	}
 }
 
-func getPagesList(pageNum int) error {
-	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=139&orderby=dateline&page=" + strconv.Itoa(pageNum))
+// 获取单页面的所有帖子
+func getPagesList(fid string, pageNum int) error {
+	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
 	if err != nil {
 		return err
 	}
@@ -50,6 +69,8 @@ func getPagesList(pageNum int) error {
 		return err
 	}
 	/*
+		// getPage所匹配的信息
+		// 获取到的参数已用“m[x]说明”标出
 		<tbody id="normalthread_233212">
 		<tr>
 		<td class="icn">
@@ -77,11 +98,44 @@ func getPagesList(pageNum int) error {
 		</tr>
 		</tbody>
 	*/
-	reg := regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="new">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em><span>([^<]+)</span></em>\n</td>\n(?:<[^\n]+>\n){7}`)
-	m := reg.FindAllStringSubmatch(string(body), -1)
+	m := getPage.FindAllStringSubmatch(string(body), -1)
+
 	for _, v := range m {
-		fmt.Println(v[1:])
+		//fmt.Println(v[1:])
+		// 转换时间为标准时间格式
+		switch {
+		case day.MatchString(v[5]):
+			printInfo("date", v[5])
+		case yesterday.MatchString(v[5]):
+			t := time.Unix(time.Now().Unix()-86400, 0)
+			date := t.Format("2006-01-02")
+			printInfo("yesterday", date)
+		case dayBeforeYesterday.MatchString(v[5]):
+			t := time.Unix(time.Now().Unix()-86400*2, 0)
+			date := t.Format("2006-01-02")
+			printInfo("day before yesterday", date)
+		case xDaysAgo.MatchString(v[5]):
+			x, err := strconv.Atoi(xDaysAgo.FindStringSubmatch(v[5])[1])
+			if err != nil {
+				printError("Time Format:", err)
+				break
+			}
+			t := time.Unix(time.Now().Unix()-86400*int64(x), 0)
+			date := t.Format("2006-01-02")
+			printInfo(string(x)+" days ago", date)
+		default:
+			data := time.Now().Format("2006-01-02")
+			printInfo("today", data)
+		}
 	}
 
 	return nil
+}
+
+func printInfo(s string, v ...interface{}) {
+	log.Println("[INFO]", s, v)
+}
+
+func printError(s string, v ...interface{}) {
+	log.Println("[ERROR]", s, v)
 }
