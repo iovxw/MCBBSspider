@@ -146,63 +146,74 @@ func main() {
 
 // 获取单页面的帖子列表
 func getPagesList(fid string, pageNum int) (pageList []*postInfo, err error) {
-	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	/*
-		// getPage所匹配的信息
-		// 获取到的参数已用“m[x]说明”标出
-		<tbody id="normalthread_233212">
-		<tr>
-		<td class="icn">
-		<a href="thread-372516-1-1.html" title="有新回复 - 新窗口打开" target="_blank">
-		<img src="static/image/common/folder_new.gif" />
-		</a>
-		</td>
-		<th class="new">
-		<em>[<a href="forum.p899">m[1]分类</a>]</em> <a href="m[2]地址" style="" class="xst" >m[3]标题</a>
-		<img src="static/image/filetype/image_s.gif" alt="attach_img" title="图片附件" align="absmiddle" />
-		<img src="template/mcbbs/img/mc_agree.gif" align="absmiddle" alt="agree" title="帖子被加分" />
-		<span class="tps">&nbsp;...<a href="">2</a><a href="">3</a><a href="html">4</a></span>
-		<a href="forum.php?mod=redirect&amp;tid=374039&amp;goto=lastpost#lastpost" class="xi1">New</a>
-		</th>
-		<td class="by">
-		<cite>
-		<a href="home.php?mod=space&amp;uid=93634" c="1">m[4]作者</a></cite>
-		<em><span class="xi1"><span title="m[5]发帖时间1">m[6]发帖时间2/span></span></em>
-		</td>
-		<td class="num"><a href="thread-369867-1-1.html" class="xi2">11</a><em>1189</em></td>
-		<td class="by">
-		<cite><a href="home9%AE" c="1">谢普</a></cite>
-		<em><a href="forum.php?mopost"><span title="2014-12-7 14:07">5&nbsp;天前</span></a></em>
-		</td>
-		</tr>
-		</tbody>
-	*/
-	m := getPage.FindAllStringSubmatch(string(body), -1)
-
-	for _, v := range m {
-		date := v[5]
-		// 如果发帖时间1为空，那么使用发帖时间2
-		if date == "" {
-			date = v[6]
+	for {
+		resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
+		if err != nil {
+			return nil, err
 		}
-		// 储存帖子信息
-		postInf := &postInfo{
-			Category: v[1],
-			Url:      v[2],
-			Title:    v[3],
-			Author:   v[4],
-			Date:     date,
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
 		}
-		pageList = append(pageList, postInf)
+		/*
+			// getPage所匹配的信息
+			// 获取到的参数已用“m[x]说明”标出
+			<tbody id="normalthread_233212">
+			<tr>
+			<td class="icn">
+			<a href="thread-372516-1-1.html" title="有新回复 - 新窗口打开" target="_blank">
+			<img src="static/image/common/folder_new.gif" />
+			</a>
+			</td>
+			<th class="new">
+			<em>[<a href="forum.p899">m[1]分类</a>]</em> <a href="m[2]地址" style="" class="xst" >m[3]标题</a>
+			<img src="static/image/filetype/image_s.gif" alt="attach_img" title="图片附件" align="absmiddle" />
+			<img src="template/mcbbs/img/mc_agree.gif" align="absmiddle" alt="agree" title="帖子被加分" />
+			<span class="tps">&nbsp;...<a href="">2</a><a href="">3</a><a href="html">4</a></span>
+			<a href="forum.php?mod=redirect&amp;tid=374039&amp;goto=lastpost#lastpost" class="xi1">New</a>
+			</th>
+			<td class="by">
+			<cite>
+			<a href="home.php?mod=space&amp;uid=93634" c="1">m[4]作者</a></cite>
+			<em><span class="xi1"><span title="m[5]发帖时间1">m[6]发帖时间2/span></span></em>
+			</td>
+			<td class="num"><a href="thread-369867-1-1.html" class="xi2">11</a><em>1189</em></td>
+			<td class="by">
+			<cite><a href="home9%AE" c="1">谢普</a></cite>
+			<em><a href="forum.php?mopost"><span title="2014-12-7 14:07">5&nbsp;天前</span></a></em>
+			</td>
+			</tr>
+			</tbody>
+		*/
+		m := getPage.FindAllStringSubmatch(string(body), -1)
+
+		if len(m) != 0 {
+			// 获取成功，继续执行
+
+			// 处理单个帖子信息
+			for _, v := range m {
+				date := v[5]
+				// 如果发帖时间1为空，那么使用发帖时间2
+				if date == "" {
+					date = v[6]
+				}
+				// 储存帖子信息
+				postInf := &postInfo{
+					Category: v[1],
+					Url:      v[2],
+					Title:    v[3],
+					Author:   v[4],
+					Date:     date,
+				}
+				pageList = append(pageList, postInf)
+			}
+			// 跳出重试
+			break
+		}
+		// 获取失败，重试
+		printError("getPageList", "获取板块分页", pageNum, "失败，正在重试")
 	}
 
 	return pageList, nil
