@@ -16,7 +16,7 @@ var (
 	// 用于获取帖子列表总页数
 	getMaxPagesNum = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
 
-	getPostBody = regexp.MustCompile(`<td class="t_f" id="postmessage_[0-9]*">\n((?:.*\n){0,}?)</td>`)
+	getPostBody = regexp.MustCompile(`<td class="t_f" id="postmessage_[0-9]*">((?:.*\n){0,}?)</td>`)
 )
 
 func main() {
@@ -61,15 +61,17 @@ func main() {
 				printError("ReadAll", err)
 				return
 			}
+			log.Println(string(body))
 
-			postBody := string(getPostBody.FindSubmatch(body)[1])
+			postBody := getPostBody.FindSubmatch(body)
 			log.Println(postBody)
+			log.Println(getPostBody.FindString(string(body)))
 		}
 	}
 }
 
 // 获取单页面的所有帖子
-func getPagesList(fid string, pageNum int) (*[]pageInfo, error) {
+func getPagesList(fid string, pageNum int) (pageList []*pageInfo, err error) {
 	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
 	if err != nil {
 		return nil, err
@@ -111,7 +113,6 @@ func getPagesList(fid string, pageNum int) (*[]pageInfo, error) {
 		</tbody>
 	*/
 	m := getPage.FindAllStringSubmatch(string(body), -1)
-	var pageList = new([]pageInfo)
 
 	for _, v := range m {
 		date := v[5]
@@ -119,14 +120,14 @@ func getPagesList(fid string, pageNum int) (*[]pageInfo, error) {
 		if date == "" {
 			date = v[6]
 		}
-		pageInf := pageInfo{
+		pageInf := &pageInfo{
 			category: v[1],
 			url:      v[2],
 			title:    v[3],
 			author:   v[4],
 			date:     date,
 		}
-		*pageList = append(*pageList, pageInf)
+		pageList = append(pageList, pageInf)
 	}
 
 	return pageList, nil
