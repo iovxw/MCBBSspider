@@ -7,21 +7,14 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"time"
 )
 
 var (
 	// 用于获取帖子信息
-	getPage = regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="new">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em><span>([^<]+)</span></em>\n</td>\n(?:<[^\n]+>\n){7}`)
+	getPage = regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="\w*">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em>(?:<span class="xi1">)?<span(?: title="([^"]+)")?>([^<]+)(</span>){1,2}</em>\n</td>\n(?:<[^\n]+>\n){7}`)
 
 	// 用于获取帖子列表总页数
 	getMaxPagesNum = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
-
-	// 用于判断时间格式
-	day                = regexp.MustCompile(`[0-9]+-[0-9]+-[0-9]+`)
-	yesterday          = regexp.MustCompile(`昨天.*`)
-	dayBeforeYesterday = regexp.MustCompile(`前天.*`)
-	xDaysAgo           = regexp.MustCompile(`([0-9]).*天前`)
 )
 
 func main() {
@@ -53,7 +46,7 @@ func main() {
 			printError("getPagesList"+string(i), err)
 			return
 		}
-		printInfo("List", pageList)
+		printInfo("List", *pageList)
 	}
 }
 
@@ -89,7 +82,7 @@ func getPagesList(fid string, pageNum int) (*[]pageInfo, error) {
 		<td class="by">
 		<cite>
 		<a href="home.php?mod=space&amp;uid=93634" c="1">m[4]作者</a></cite>
-		<em><span>m[5]发帖时间</span></em>
+		<em><span class="xi1"><span title="m[5]发帖时间1">m[6]发帖时间2/span></span></em>
 		</td>
 		<td class="num"><a href="thread-369867-1-1.html" class="xi2">11</a><em>1189</em></td>
 		<td class="by">
@@ -103,43 +96,20 @@ func getPagesList(fid string, pageNum int) (*[]pageInfo, error) {
 	var pageList = new([]pageInfo)
 
 	for _, v := range m {
-		// 转换发帖时间为标准时间格式
-		switch {
-		case day.MatchString(v[5]):
-			printInfo("date", v[5])
-		case yesterday.MatchString(v[5]):
-			t := time.Unix(time.Now().Unix()-86400, 0)
-			date := t.Format("2006-01-02")
-			v[5] = date
-			printInfo("yesterday", date)
-		case dayBeforeYesterday.MatchString(v[5]):
-			t := time.Unix(time.Now().Unix()-86400*2, 0)
-			date := t.Format("2006-01-02")
-			v[5] = date
-			printInfo("day before yesterday", date)
-		case xDaysAgo.MatchString(v[5]):
-			x, err := strconv.Atoi(xDaysAgo.FindStringSubmatch(v[5])[1])
-			if err != nil {
-				printError("Time Format:", err)
-				break
-			}
-			t := time.Unix(time.Now().Unix()-86400*int64(x), 0)
-			date := t.Format("2006-01-02")
-			v[5] = date
-			printInfo(string(x)+" days ago", date)
-		default:
-			date := time.Now().Format("2006-01-02")
-			v[5] = date
-			printInfo("today", date)
+		var date string
+		if v[5] == "" {
+			date = v[6]
+		} else {
+			date = v[5]
 		}
 		pageInf := pageInfo{
 			category: v[1],
 			url:      v[2],
 			title:    v[3],
 			author:   v[4],
-			date:     v[5],
+			date:     date,
 		}
-		pageList = append(*pageList, pageInf)
+		*pageList = append(*pageList, pageInf)
 	}
 
 	return pageList, nil
