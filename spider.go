@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,7 +12,6 @@ import (
 	"strconv"
 	"sync"
 
-	"fmt"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
