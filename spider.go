@@ -35,13 +35,6 @@ func main() {
 	// 论坛板块fid
 	fid := os.Args[1]
 
-	db, err := leveldb.OpenFile("db/"+fid, nil)
-	if err != nil {
-		printError("OpenDB", err)
-		os.Exit(1)
-	}
-	defer db.Close()
-
 	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=1")
 	if err != nil {
 		printError("http.Get", err)
@@ -67,6 +60,14 @@ func main() {
 		os.Exit(1)
 	}
 	printInfo("本板块全部分页数量", maxPagesNum)
+
+	// 创建数据库
+	db, err := leveldb.OpenFile("db/"+fid, nil)
+	if err != nil {
+		printError("OpenDB", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 
 	// 保存板块index信息到数据库
 	buf, err := encode(&postIndex{
