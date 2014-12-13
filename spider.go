@@ -48,25 +48,26 @@ func main() {
 	}
 	// 获取每一页的所有帖子
 	for i := 0; i < maxPagesNum; i++ {
-		err = getPagesList(fid, i+1)
+		pageList, err := getPagesList(fid, i+1)
 		if err != nil {
 			printError("getPagesList"+string(i), err)
 			return
 		}
+		printInfo("List", pageList)
 	}
 }
 
 // 获取单页面的所有帖子
-func getPagesList(fid string, pageNum int) error {
+func getPagesList(fid string, pageNum int) (*[]pageInfo, error) {
 	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	/*
 		// getPage所匹配的信息
@@ -99,6 +100,7 @@ func getPagesList(fid string, pageNum int) error {
 		</tbody>
 	*/
 	m := getPage.FindAllStringSubmatch(string(body), -1)
+	var pageList = new([]pageInfo)
 
 	for _, v := range m {
 		// 转换发帖时间为标准时间格式
@@ -108,12 +110,12 @@ func getPagesList(fid string, pageNum int) error {
 		case yesterday.MatchString(v[5]):
 			t := time.Unix(time.Now().Unix()-86400, 0)
 			date := t.Format("2006-01-02")
-			m[5] = date
+			v[5] = date
 			printInfo("yesterday", date)
 		case dayBeforeYesterday.MatchString(v[5]):
 			t := time.Unix(time.Now().Unix()-86400*2, 0)
 			date := t.Format("2006-01-02")
-			m[5] = date
+			v[5] = date
 			printInfo("day before yesterday", date)
 		case xDaysAgo.MatchString(v[5]):
 			x, err := strconv.Atoi(xDaysAgo.FindStringSubmatch(v[5])[1])
@@ -123,16 +125,24 @@ func getPagesList(fid string, pageNum int) error {
 			}
 			t := time.Unix(time.Now().Unix()-86400*int64(x), 0)
 			date := t.Format("2006-01-02")
-			m[5] = date
+			v[5] = date
 			printInfo(string(x)+" days ago", date)
 		default:
 			date := time.Now().Format("2006-01-02")
-			m[5] = date
+			v[5] = date
 			printInfo("today", date)
 		}
+		pageInf := pageInfo{
+			category: v[1],
+			url:      v[2],
+			title:    v[3],
+			author:   v[4],
+			date:     v[5],
+		}
+		pageList = append(*pageList, pageInf)
 	}
 
-	return nil
+	return pageList, nil
 }
 
 func printInfo(s string, v ...interface{}) {
@@ -141,4 +151,12 @@ func printInfo(s string, v ...interface{}) {
 
 func printError(s string, v ...interface{}) {
 	log.Println("[ERROR]", s, v)
+}
+
+type pageInfo struct {
+	category string
+	url      string
+	title    string
+	author   string
+	date     string
 }
