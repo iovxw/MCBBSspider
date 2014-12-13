@@ -1,29 +1,50 @@
 package main
 
 import (
+	"bytes"
+	"encoding/gob"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"strconv"
+	"sync"
+
+	"fmt"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
 	// 用于获取帖子信息
 	getPage = regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="\w*">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em>(?:<span class="xi1">)?<span(?: title="([^"]+)")?>([^<]+)(</span>){1,2}</em>\n</td>\n(?:<[^\n]+>\n){7}`)
-
 	// 用于获取帖子列表总页数
 	getMaxPagesNum = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
-
+	// 用于获取帖子内容
 	getPostBody = regexp.MustCompile(`<td class="t_f" id="postmessage_[0-9]*">((?:.*\n){0,}?)</td>`)
 )
 
 func main() {
-	fid := "139"
+	if len(os.Args) == 1 {
+		fmt.Println("请在命令后添加论坛板块PID参数")
+		fmt.Println("PID可从板块URL中寻找")
+		fmt.Println("数据会保存在db/PID路径中")
+		return
+	}
+
+	// 论坛板块fid
+	fid := os.Args[1]
+
+	db, err := leveldb.OpenFile("db/"+fid, nil)
+	if err != nil {
+		printError("OpenDB", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
 	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=1")
 	if err != nil {
-		printError("GetPage", err)
+		printError("http.Get", err)
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
@@ -35,43 +56,95 @@ func main() {
 	}
 
 	// 获取帖子列表总页数
-	buf := string(getMaxPagesNum.FindSubmatch(body)[1])
-	maxPagesNum, err := strconv.Atoi(buf)
+	n := getMaxPagesNum.FindSubmatch(body)
+	if len(n) == 0 {
+		printError("GetPage", "获取板块信息错误，请检查板块PID是否正确")
+		os.Exit(1)
+	}
+	maxPagesNum, err := strconv.Atoi(string(n[1]))
 	if err != nil {
 		printError("Atoi", err)
 		os.Exit(1)
 	}
+	printInfo("本板块全部分页数量", maxPagesNum)
+
+	// 保存板块index信息到数据库
+	buf, err := encode(&postIndex{
+		PageNum: maxPagesNum,
+	})
+	if err != nil {
+		printError("EncodeIndex", err)
+	}
+	err = db.Put([]byte("index"), buf, nil)
+	if err != nil {
+		printError("PutIndex", err)
+		os.Exit(1)
+	}
+
+	// 用于等待全部线程执行完毕
+	var wg sync.WaitGroup
 	// 获取每一页的所有帖子
 	for i := 0; i < maxPagesNum; i++ {
-		pageList, err := getPagesList(fid, i+1)
-		if err != nil {
-			printError("getPagesList"+string(i), err)
-			return
-		}
-		for _, v := range pageList {
-			resp, err := http.Get("http://www.mcbbs.net/" + v.url)
+		wg.Add(1)
+		go func(page int) {
+			postList, err := getPagesList(fid, page)
 			if err != nil {
-				printError("GetPage", err)
+				printError("getPagesList"+string(page), err)
 				return
 			}
-			defer resp.Body.Close()
+			// 获取每个帖子的内容
+			for i, v := range postList {
+				// for用于重试
+				for {
+					resp, err := http.Get("http://www.mcbbs.net/" + v.Url)
+					if err != nil {
+						printError("GetPage", err)
+						return
+					}
+					defer resp.Body.Close()
 
-			body, err := ioutil.ReadAll(resp.Body)
+					body, err := ioutil.ReadAll(resp.Body)
+					if err != nil {
+						printError("ReadAll", err)
+						return
+					}
+
+					n := getPostBody.FindSubmatch(body)
+					if len(n) != 0 {
+						// get成功
+						postBody := string(n[1])
+						// 存入Body
+						postList[i].Body = postBody
+						printInfo("GetPost", v.Title, "[OK]")
+						// 跳出循环重试
+						break
+					}
+					// 获取失败，重试
+					printError("GetPost", "获取帖子《"+v.Title+"》失败，正在重试")
+				}
+			}
+			// 编码
+			byt, err := encode(postList)
 			if err != nil {
-				printError("ReadAll", err)
+				printError("Encode", err)
 				return
 			}
-			log.Println(string(body))
-
-			postBody := getPostBody.FindSubmatch(body)
-			log.Println(postBody)
-			log.Println(getPostBody.FindString(string(body)))
-		}
+			// 存入数据库
+			err = db.Put([]byte("page_"+strconv.Itoa(page)), byt, nil)
+			if err != nil {
+				printError("db.Put", err)
+				return
+			}
+			printInfo("OK", "线程", page, "执行完毕")
+			printInfo("OK", "板块分页", page, "中的所有帖子已经储存到本地")
+			wg.Done()
+		}(i + 1)
 	}
+	wg.Wait()
 }
 
-// 获取单页面的所有帖子
-func getPagesList(fid string, pageNum int) (pageList []*pageInfo, err error) {
+// 获取单页面的帖子列表
+func getPagesList(fid string, pageNum int) (pageList []*postInfo, err error) {
 	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
 	if err != nil {
 		return nil, err
@@ -120,31 +193,53 @@ func getPagesList(fid string, pageNum int) (pageList []*pageInfo, err error) {
 		if date == "" {
 			date = v[6]
 		}
-		pageInf := &pageInfo{
-			category: v[1],
-			url:      v[2],
-			title:    v[3],
-			author:   v[4],
-			date:     date,
+		// 储存帖子信息
+		postInf := &postInfo{
+			Category: v[1],
+			Url:      v[2],
+			Title:    v[3],
+			Author:   v[4],
+			Date:     date,
 		}
-		pageList = append(pageList, pageInf)
+		pageList = append(pageList, postInf)
 	}
 
 	return pageList, nil
 }
 
 func printInfo(s string, v ...interface{}) {
-	log.Println("[INFO]", s, v)
+	log.Println(append([]interface{}{"[INFO]", s + ":"}, v...)...)
 }
 
 func printError(s string, v ...interface{}) {
-	log.Println("[ERROR]", s, v)
+	log.Println(append([]interface{}{"[ERROR]", s + ":"}, v...)...)
 }
 
-type pageInfo struct {
-	category string
-	url      string
-	title    string
-	author   string
-	date     string
+func encode(data interface{}) ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	enc := gob.NewEncoder(buf)
+	err := enc.Encode(data)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func decode(data []byte, to interface{}) error {
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	return dec.Decode(to)
+}
+
+type postIndex struct {
+	PageNum int
+}
+
+type postInfo struct {
+	Category string
+	Url      string
+	Title    string
+	Author   string
+	Date     string
+	Body     string
 }
