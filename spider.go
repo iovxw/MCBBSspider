@@ -101,18 +101,19 @@ func getPagesList(fid string, pageNum int) error {
 	m := getPage.FindAllStringSubmatch(string(body), -1)
 
 	for _, v := range m {
-		//fmt.Println(v[1:])
-		// 转换时间为标准时间格式
+		// 转换发帖时间为标准时间格式
 		switch {
 		case day.MatchString(v[5]):
 			printInfo("date", v[5])
 		case yesterday.MatchString(v[5]):
 			t := time.Unix(time.Now().Unix()-86400, 0)
 			date := t.Format("2006-01-02")
+			m[5] = date
 			printInfo("yesterday", date)
 		case dayBeforeYesterday.MatchString(v[5]):
 			t := time.Unix(time.Now().Unix()-86400*2, 0)
 			date := t.Format("2006-01-02")
+			m[5] = date
 			printInfo("day before yesterday", date)
 		case xDaysAgo.MatchString(v[5]):
 			x, err := strconv.Atoi(xDaysAgo.FindStringSubmatch(v[5])[1])
@@ -122,10 +123,12 @@ func getPagesList(fid string, pageNum int) error {
 			}
 			t := time.Unix(time.Now().Unix()-86400*int64(x), 0)
 			date := t.Format("2006-01-02")
+			m[5] = date
 			printInfo(string(x)+" days ago", date)
 		default:
-			data := time.Now().Format("2006-01-02")
-			printInfo("today", data)
+			date := time.Now().Format("2006-01-02")
+			m[5] = date
+			printInfo("today", date)
 		}
 	}
 
