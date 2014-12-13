@@ -97,6 +97,7 @@ func getPagesList(fid string, pageNum int) (*[]pageInfo, error) {
 
 	for _, v := range m {
 		var date string
+		// 如果发帖时间1为空，那么使用发帖时间2
 		if v[5] == "" {
 			date = v[6]
 		} else {
