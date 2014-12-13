@@ -26,7 +26,7 @@ var (
 
 func main() {
 	if len(os.Args) == 1 {
-		fmt.Println("请在命令后添加论坛板块PID参数")
+		fmt.Println("请在命令后添加论坛板块FID参数")
 		fmt.Println("FID可从板块URL中寻找")
 		fmt.Println("数据会保存在db/FID路径中")
 		return
