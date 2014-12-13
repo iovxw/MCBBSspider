@@ -146,7 +146,7 @@ func main() {
 }
 
 // 获取单页面的帖子列表
-func getPagesList(fid string, pageNum int) (pageList []*postInfo, err error) {
+func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 	for {
 		resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
 		if err != nil {
@@ -201,7 +201,7 @@ func getPagesList(fid string, pageNum int) (pageList []*postInfo, err error) {
 					date = v[6]
 				}
 				// 储存帖子信息
-				postInf := &postInfo{
+				postInf := postInfo{
 					Category: v[1],
 					Url:      v[2],
 					Title:    v[3],
