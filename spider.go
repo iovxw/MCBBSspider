@@ -15,6 +15,8 @@ var (
 
 	// 用于获取帖子列表总页数
 	getMaxPagesNum = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
+
+	getPostBody = regexp.MustCompile(`<td class="t_f" id="postmessage_[0-9]*">\n((?:.*\n){0,}?)</td>`)
 )
 
 func main() {
@@ -33,8 +35,8 @@ func main() {
 	}
 
 	// 获取帖子列表总页数
-	buf := getMaxPagesNum.FindStringSubmatch(string(body))
-	maxPagesNum, err := strconv.Atoi(buf[1])
+	buf := string(getMaxPagesNum.FindSubmatch(body)[1])
+	maxPagesNum, err := strconv.Atoi(buf)
 	if err != nil {
 		printError("Atoi", err)
 		os.Exit(1)
@@ -46,7 +48,23 @@ func main() {
 			printError("getPagesList"+string(i), err)
 			return
 		}
-		printInfo("List", *pageList)
+		for _, v := range pageList {
+			resp, err := http.Get("http://www.mcbbs.net/" + v.url)
+			if err != nil {
+				printError("GetPage", err)
+				return
+			}
+			defer resp.Body.Close()
+
+			body, err := ioutil.ReadAll(resp.Body)
+			if err != nil {
+				printError("ReadAll", err)
+				return
+			}
+
+			postBody := string(getPostBody.FindSubmatch(body)[1])
+			log.Println(postBody)
+		}
 	}
 }
 
