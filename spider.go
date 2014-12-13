@@ -27,8 +27,8 @@ var (
 func main() {
 	if len(os.Args) == 1 {
 		fmt.Println("请在命令后添加论坛板块PID参数")
-		fmt.Println("PID可从板块URL中寻找")
-		fmt.Println("数据会保存在db/PID路径中")
+		fmt.Println("FID可从板块URL中寻找")
+		fmt.Println("数据会保存在db/FID路径中")
 		return
 	}
 
@@ -142,6 +142,7 @@ func main() {
 		}(i + 1)
 	}
 	wg.Wait()
+	printInfo("OK", "FID为", fid, "的板块中的所有帖子已储存到本地")
 }
 
 // 获取单页面的帖子列表
