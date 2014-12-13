@@ -96,12 +96,10 @@ func getPagesList(fid string, pageNum int) (*[]pageInfo, error) {
 	var pageList = new([]pageInfo)
 
 	for _, v := range m {
-		var date string
+		date := v[5]
 		// 如果发帖时间1为空，那么使用发帖时间2
-		if v[5] == "" {
+		if date == "" {
 			date = v[6]
-		} else {
-			date = v[5]
 		}
 		pageInf := pageInfo{
 			category: v[1],
