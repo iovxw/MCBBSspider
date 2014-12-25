@@ -91,37 +91,49 @@ func main() {
 			postList, err := getPagesList(fid, page)
 			if err != nil {
 				printError("getPagesList"+string(page), err)
-				return
-			}
-			// 获取每个帖子的内容
-			for i, v := range postList {
-				// for用于重试
-				for {
-					resp, err := http.Get("http://www.mcbbs.net/" + v.Url)
-					if err != nil {
-						printError("GetPage", err)
-						return
-					}
-					defer resp.Body.Close()
+			} else {
+				// 获取每个帖子的内容
+				for i, v := range postList {
+					// for用于重试
+					for {
+						resp, err := http.Get("http://www.mcbbs.net/" + v.Url)
+						if err != nil {
+							printError("GetPost", err)
+						} else {
+							defer resp.Body.Close()
 
-					body, err := ioutil.ReadAll(resp.Body)
-					if err != nil {
-						printError("ReadAll", err)
-						return
+							// 检查服务器是否返回成功
+							if resp.StatusCode != 200 {
+								// 服务器错误
+								printError("GetPost.ServerError", "服务器错误，错误码：", resp.StatusCode)
+								if resp.StatusCode == 404 {
+									// 如果为404，则没有重试的必要，跳出重试
+									printError("GetPost.Retry", "帖子《"+v.Title+"》不存在")
+									break
+								}
+							} else {
+								body, err := ioutil.ReadAll(resp.Body)
+								if err != nil {
+									printError("GetPost.ReadAll", err)
+								} else {
+									n := getPostBody.FindSubmatch(body)
+									// 检查是否获取body成功
+									if len(n) == 0 {
+										printError("GetPost.FindSubmatch", "未找到页面内文章部分")
+									} else {
+										postBody := string(n[1])
+										// 存入Body
+										postList[i].Body = postBody
+										printInfo("GetPost", v.Title, "[OK]")
+										// 跳出循环重试
+										break
+									}
+								}
+							}
+						}
+						// 获取失败，重试
+						printError("GetPost.Retry", "获取帖子《"+v.Title+"》失败，正在重试")
 					}
-
-					n := getPostBody.FindSubmatch(body)
-					if len(n) != 0 {
-						// get成功
-						postBody := string(n[1])
-						// 存入Body
-						postList[i].Body = postBody
-						printInfo("GetPost", v.Title, "[OK]")
-						// 跳出循环重试
-						break
-					}
-					// 获取失败，重试
-					printError("GetPost", "获取帖子《"+v.Title+"》失败，正在重试")
 				}
 			}
 			// 编码
@@ -150,68 +162,77 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 	for {
 		resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
 		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
+			printError("GetPageList", err)
+		} else {
+			defer resp.Body.Close()
 
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		/*
-			// getPage所匹配的信息
-			// 获取到的参数已用“m[x]说明”标出
-			<tbody id="normalthread_233212">
-			<tr>
-			<td class="icn">
-			<a href="thread-372516-1-1.html" title="有新回复 - 新窗口打开" target="_blank">
-			<img src="static/image/common/folder_new.gif" />
-			</a>
-			</td>
-			<th class="new">
-			<em>[<a href="forum.p899">m[1]分类</a>]</em> <a href="m[2]地址" style="" class="xst" >m[3]标题</a>
-			<img src="static/image/filetype/image_s.gif" alt="attach_img" title="图片附件" align="absmiddle" />
-			<img src="template/mcbbs/img/mc_agree.gif" align="absmiddle" alt="agree" title="帖子被加分" />
-			<span class="tps">&nbsp;...<a href="">2</a><a href="">3</a><a href="html">4</a></span>
-			<a href="forum.php?mod=redirect&amp;tid=374039&amp;goto=lastpost#lastpost" class="xi1">New</a>
-			</th>
-			<td class="by">
-			<cite>
-			<a href="home.php?mod=space&amp;uid=93634" c="1">m[4]作者</a></cite>
-			<em><span class="xi1"><span title="m[5]发帖时间1">m[6]发帖时间2/span></span></em>
-			</td>
-			<td class="num"><a href="thread-369867-1-1.html" class="xi2">11</a><em>1189</em></td>
-			<td class="by">
-			<cite><a href="home9%AE" c="1">谢普</a></cite>
-			<em><a href="forum.php?mopost"><span title="2014-12-7 14:07">5&nbsp;天前</span></a></em>
-			</td>
-			</tr>
-			</tbody>
-		*/
-		m := getPage.FindAllStringSubmatch(string(body), -1)
+			// 检查服务器是否返回成功
+			if resp.StatusCode != 200 {
+				// 服务器错误
+				printError("GetPost.ServerError", "服务器错误，错误码：", resp.StatusCode)
+			} else {
+				body, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					printError("GetPageList.ReadAll", err)
+				} else {
+					/*
+						// getPage所匹配的信息
+						// 获取到的参数已用“m[x]说明”标出
+						<tbody id="normalthread_233212">
+						<tr>
+						<td class="icn">
+						<a href="thread-372516-1-1.html" title="有新回复 - 新窗口打开" target="_blank">
+						<img src="static/image/common/folder_new.gif" />
+						</a>
+						</td>
+						<th class="new">
+						<em>[<a href="forum.p899">m[1]分类</a>]</em> <a href="m[2]地址" style="" class="xst" >m[3]标题</a>
+						<img src="static/image/filetype/image_s.gif" alt="attach_img" title="图片附件" align="absmiddle" />
+						<img src="template/mcbbs/img/mc_agree.gif" align="absmiddle" alt="agree" title="帖子被加分" />
+						<span class="tps">&nbsp;...<a href="">2</a><a href="">3</a><a href="html">4</a></span>
+						<a href="forum.php?mod=redirect&amp;tid=374039&amp;goto=lastpost#lastpost" class="xi1">New</a>
+						</th>
+						<td class="by">
+						<cite>
+						<a href="home.php?mod=space&amp;uid=93634" c="1">m[4]作者</a></cite>
+						<em><span class="xi1"><span title="m[5]发帖时间1">m[6]发帖时间2/span></span></em>
+						</td>
+						<td class="num"><a href="thread-369867-1-1.html" class="xi2">11</a><em>1189</em></td>
+						<td class="by">
+						<cite><a href="home9%AE" c="1">谢普</a></cite>
+						<em><a href="forum.php?mopost"><span title="2014-12-7 14:07">5&nbsp;天前</span></a></em>
+						</td>
+						</tr>
+						</tbody>
+					*/
+					m := getPage.FindAllStringSubmatch(string(body), -1)
 
-		if len(m) != 0 {
-			// 获取成功，继续执行
-
-			// 处理单个帖子信息
-			for _, v := range m {
-				date := v[5]
-				// 如果发帖时间1为空，那么使用发帖时间2
-				if date == "" {
-					date = v[6]
+					// 检查是否获取成功
+					if len(m) == 0 {
+						printError("GetPageList.FindAllStringSubmatch", "未找到分页内帖子")
+					} else {
+						// 处理单个帖子信息
+						for _, v := range m {
+							date := v[5]
+							// 如果发帖时间1为空，那么使用发帖时间2
+							if date == "" {
+								date = v[6]
+							}
+							// 储存帖子信息
+							postInf := postInfo{
+								Category: v[1],
+								Url:      v[2],
+								Title:    v[3],
+								Author:   v[4],
+								Date:     date,
+							}
+							pageList = append(pageList, postInf)
+						}
+						// 跳出重试
+						break
+					}
 				}
-				// 储存帖子信息
-				postInf := postInfo{
-					Category: v[1],
-					Url:      v[2],
-					Title:    v[3],
-					Author:   v[4],
-					Date:     date,
-				}
-				pageList = append(pageList, postInf)
 			}
-			// 跳出重试
-			break
 		}
 		// 获取失败，重试
 		printError("getPageList", "获取板块分页", pageNum, "失败，正在重试")
