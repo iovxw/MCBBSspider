@@ -17,7 +17,7 @@ import (
 
 var (
 	// 用于获取版块名称
-	getForumName = regexp.MustCompile(`<h1 class="xs2">\n<a href="forum-news-1.html">([^<]+)</a>\n(?:.*\n?){0,}?</h1>`)
+	getForumName = regexp.MustCompile(`<h1 class="xs2">[^\w]{0,}?<a[^>]*>([^<]*)</a>`)
 	// 用于获取版块帖子分页数量
 	getForumPageNumber = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
 	// 用于获取帖子信息
@@ -50,19 +50,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	if bytes.Contains(body, []byte(`<p>抱歉，指定的版块不存在</p>`)) {
+		printError("GetForum", "版块不存在，请检查PID是否正确")
+		os.Exit(1)
+	}
+
 	// 获取版块名称
 	n := getForumName.FindSubmatch(body)
 	if len(n) == 0 {
-		printError("GetForumName", "获取版块名称出错，请检查版块PID是否正确")
+		printError("GetForumName", "获取版块名称出错")
 		os.Exit(1)
 	}
-	forumName := n[1]
-	printInfo("GetForumName", "版块名称", forumName)
+	forumName := string(n[1])
+	printInfo("版块名称", forumName)
 
 	// 获取版块帖子分页数量
 	n = getForumPageNumber.FindSubmatch(body)
 	if len(n) == 0 {
-		printError("GetPage", "获取版块分页数量出错")
+		printError("GetForumPageNumber", "获取版块分页数量出错")
 		os.Exit(1)
 	}
 	maxPagesNum, err := strconv.Atoi(string(n[1]))
