@@ -88,7 +88,6 @@ func main() {
 		os.Exit(1)
 	}
 	forumIntroduction := string(n[1])
-	print(forumIntroduction)
 
 	// 创建数据库
 	db, err := leveldb.OpenFile("db/"+fid, nil)
