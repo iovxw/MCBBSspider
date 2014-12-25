@@ -16,14 +16,14 @@ import (
 )
 
 var (
-	// 因为go的正则在匹配ReadAll出来的[]byte时有点奇怪，所以必须用[^\w]{0,}?来代替\n
+	// go的正则在匹配ReadAll出来的数据时有点奇怪，必须用[\w\W]{0,}?来代替\n
 
 	// 用于获取版块名称
-	getForumName = regexp.MustCompile(`<h1 class="xs2">[^\w]{0,}?<a[^>]*>([^<]*)</a>`)
+	getForumName = regexp.MustCompile(`<h1 class="xs2">[\w\W]{0,}?<a[^>]*>([^<]*)</a>`)
 	// 用于获取版块帖子分页数量
 	getForumPageNumber = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
 	// 用于获取版块介绍
-	getForumIntroduction = regexp.MustCompile(`<div id="forum_rules_[0-9]*"[^>]*>([\w\W]{0,}?)(?:</div>[^\w]{0,}?){3}<div class="drag">`)
+	getForumIntroduction = regexp.MustCompile(`<div id="forum_rules_[0-9]*"[^>]*>([\w\W]{0,}?)(?:</div>[\w\W]{0,}?){3}<div class="drag">`)
 	// 用于获取帖子信息
 	getPostInfo = regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="\w*">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em>(?:<span class="xi1">)?<span(?: title="([^"]+)")?>([^<]+)(</span>){1,2}</em>\n</td>\n(?:<[^\n]+>\n){7}`)
 	// 用于获取帖子内容
