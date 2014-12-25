@@ -16,6 +16,8 @@ import (
 )
 
 var (
+	// 用于获取版块名称
+	getForumName = regexp.MustCompile(`<h1 class="xs2">\n<a href="forum-news-1.html">([^<]+)</a>\n(?:.*\n?){0,}?</h1>`)
 	// 用于获取版块帖子分页数量
 	getForumPageNumber = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
 	// 用于获取帖子信息
@@ -26,13 +28,13 @@ var (
 
 func main() {
 	if len(os.Args) == 1 {
-		fmt.Println("请在命令后添加论坛板块FID参数")
-		fmt.Println("FID可从板块URL中寻找")
+		fmt.Println("请在命令后添加论坛版块FID参数")
+		fmt.Println("FID可从版块URL中寻找")
 		fmt.Println("数据会保存在db/FID路径中")
 		return
 	}
 
-	// 论坛板块fid
+	// 论坛版块fid
 	fid := os.Args[1]
 
 	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=1")
@@ -48,10 +50,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 获取版块帖子分页数量
-	n := getForumPageNumber.FindSubmatch(body)
+	// 获取版块名称
+	n := getForumName.FindSubmatch(body)
 	if len(n) == 0 {
-		printError("GetPage", "获取板块信息错误，请检查板块PID是否正确")
+		printError("GetForumName", "获取版块名称出错，请检查版块PID是否正确")
+		os.Exit(1)
+	}
+	forumName := n[1]
+	printInfo("GetForumName", "版块名称", forumName)
+
+	// 获取版块帖子分页数量
+	n = getForumPageNumber.FindSubmatch(body)
+	if len(n) == 0 {
+		printError("GetPage", "获取版块分页数量出错")
 		os.Exit(1)
 	}
 	maxPagesNum, err := strconv.Atoi(string(n[1]))
@@ -59,7 +70,7 @@ func main() {
 		printError("Atoi", err)
 		os.Exit(1)
 	}
-	printInfo("本板块全部分页数量", maxPagesNum)
+	printInfo("本版块全部分页数量", maxPagesNum)
 
 	// 创建数据库
 	db, err := leveldb.OpenFile("db/"+fid, nil)
@@ -69,16 +80,17 @@ func main() {
 	}
 	defer db.Close()
 
-	// 保存板块index信息到数据库
-	buf, err := encode(&postIndex{
-		PageNum: maxPagesNum,
+	// 保存版块信息到数据库
+	buf, err := encode(&forumInfo{
+		Name:       forumName,
+		PageNumber: maxPagesNum,
 	})
 	if err != nil {
-		printError("EncodeIndex", err)
+		printError("EncodeForumInfo", err)
 	}
-	err = db.Put([]byte("index"), buf, nil)
+	err = db.Put([]byte("info"), buf, nil)
 	if err != nil {
-		printError("PutIndex", err)
+		printError("PutForumInfo", err)
 		os.Exit(1)
 	}
 
@@ -155,12 +167,12 @@ func main() {
 			pageAmount--
 
 			printInfo("OK", "线程", page, "执行完毕")
-			printInfo("OK", "板块分页", page, "中的所有帖子已经储存到本地，还有", pageAmount, "页正在下载中")
+			printInfo("OK", "版块分页", page, "中的所有帖子已经储存到本地，还有", pageAmount, "页正在下载中")
 			wg.Done()
 		}(i + 1)
 	}
 	wg.Wait()
-	printInfo("OK", "FID为", fid, "的板块中的所有帖子已储存到本地")
+	printInfo("OK", "FID为", fid, "的版块中的所有帖子已储存到本地")
 }
 
 // 获取单页面的帖子列表
@@ -241,7 +253,7 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 			}
 		}
 		// 获取失败，重试
-		printError("getPageList", "获取板块分页", pageNum, "失败，正在重试")
+		printError("getPageList", "获取版块分页", pageNum, "失败，正在重试")
 	}
 
 	return pageList, nil
@@ -271,8 +283,9 @@ func decode(data []byte, to interface{}) error {
 	return dec.Decode(to)
 }
 
-type postIndex struct {
-	PageNum int
+type forumInfo struct {
+	Name       string
+	PageNumber int
 }
 
 type postInfo struct {
