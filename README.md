@@ -32,9 +32,9 @@ type forumInfo struct {
 
 `Introduction`为版块介绍
 
-然后有和版块数量相同的key为`page_x`的数据，x为分页
+然后有和版块分页数量相同的key为`page_x`的数据，x为分页
 
-比如key为`page_1`里存放的就是版块第一页里面的所有帖子
+比如key为`page_1`里存放的就是版块分页第一页里面的所有帖子
 
 储存的数据为经过`gob`编码的结构体切片
 
