@@ -16,10 +16,14 @@ import (
 )
 
 var (
+	// 因为go的正则在匹配ReadAll出来的[]byte时有点奇怪，所以必须用[^\w]{0,}?来代替\n
+
 	// 用于获取版块名称
 	getForumName = regexp.MustCompile(`<h1 class="xs2">[^\w]{0,}?<a[^>]*>([^<]*)</a>`)
 	// 用于获取版块帖子分页数量
 	getForumPageNumber = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
+	// 用于获取版块介绍
+	getForumIntroduction = regexp.MustCompile(`<div id="forum_rules_[0-9]*"[^>]*>([\w\W]{0,}?)(?:</div>[^\w]{0,}?){3}<div class="drag">`)
 	// 用于获取帖子信息
 	getPostInfo = regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="\w*">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em>(?:<span class="xi1">)?<span(?: title="([^"]+)")?>([^<]+)(</span>){1,2}</em>\n</td>\n(?:<[^\n]+>\n){7}`)
 	// 用于获取帖子内容
@@ -77,6 +81,15 @@ func main() {
 	}
 	printInfo("本版块全部分页数量", maxPagesNum)
 
+	// 获取版块介绍
+	n = getForumIntroduction.FindSubmatch(body)
+	if len(n) == 0 {
+		printError("GetForumIntroduction", "获取版块介绍出错")
+		os.Exit(1)
+	}
+	forumIntroduction := string(n[1])
+	print(forumIntroduction)
+
 	// 创建数据库
 	db, err := leveldb.OpenFile("db/"+fid, nil)
 	if err != nil {
@@ -87,8 +100,9 @@ func main() {
 
 	// 保存版块信息到数据库
 	buf, err := encode(&forumInfo{
-		Name:       forumName,
-		PageNumber: maxPagesNum,
+		Name:         forumName,
+		PageNumber:   maxPagesNum,
+		Introduction: forumIntroduction,
 	})
 	if err != nil {
 		printError("EncodeForumInfo", err)
@@ -289,8 +303,9 @@ func decode(data []byte, to interface{}) error {
 }
 
 type forumInfo struct {
-	Name       string
-	PageNumber int
+	Name         string
+	PageNumber   int
+	Introduction string
 }
 
 type postInfo struct {
