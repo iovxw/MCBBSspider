@@ -16,12 +16,12 @@ import (
 )
 
 var (
+	// 用于获取版块帖子分页数量
+	getForumPageNumber = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
 	// 用于获取帖子信息
-	getPage = regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="\w*">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em>(?:<span class="xi1">)?<span(?: title="([^"]+)")?>([^<]+)(</span>){1,2}</em>\n</td>\n(?:<[^\n]+>\n){7}`)
-	// 用于获取帖子列表总页数
-	getMaxPagesNum = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
+	getPostInfo = regexp.MustCompile(`<tbody id="normalthread_[0-9]+">\n<tr>\n<td class="icn">\n(?:<[^>]+>\n)+</td>\n<th class="\w*">\n<em>\[<a[^>]*>([^<]+)</a>\]</em>\s*<a href="([^"]+)"[^>]*>([^<]+)</a>\n(?:<[^\n]+>\n){0,}?</th>\n<td class="by">\n<cite>\n<a[^>]*>([^<]+)</a></cite>\n<em>(?:<span class="xi1">)?<span(?: title="([^"]+)")?>([^<]+)(</span>){1,2}</em>\n</td>\n(?:<[^\n]+>\n){7}`)
 	// 用于获取帖子内容
-	getPostBody = regexp.MustCompile(`<td class="t_f" id="postmessage_[0-9]*">((?:.*\n){0,}?)</td>`)
+	getPostBody = regexp.MustCompile(`<div class="pcb">((?:.*\n){0,}?)<div id="comment_[0-9]*" class="cm">`)
 )
 
 func main() {
@@ -48,8 +48,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 获取帖子列表总页数
-	n := getMaxPagesNum.FindSubmatch(body)
+	// 获取版块帖子分页数量
+	n := getForumPageNumber.FindSubmatch(body)
 	if len(n) == 0 {
 		printError("GetPage", "获取板块信息错误，请检查板块PID是否正确")
 		os.Exit(1)
@@ -84,9 +84,12 @@ func main() {
 
 	// 用于等待全部线程执行完毕
 	var wg sync.WaitGroup
+	// 用于统计还有多少页未完成
+	var pageAmount int
 	// 获取每一页的所有帖子
 	for i := 0; i < maxPagesNum; i++ {
 		wg.Add(1)
+		pageAmount++
 		go func(page int) {
 			postList, err := getPagesList(fid, page)
 			if err != nil {
@@ -148,8 +151,11 @@ func main() {
 				printError("db.Put", err)
 				return
 			}
+
+			pageAmount--
+
 			printInfo("OK", "线程", page, "执行完毕")
-			printInfo("OK", "板块分页", page, "中的所有帖子已经储存到本地")
+			printInfo("OK", "板块分页", page, "中的所有帖子已经储存到本地，还有", pageAmount, "页正在下载中")
 			wg.Done()
 		}(i + 1)
 	}
@@ -205,7 +211,7 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 						</tr>
 						</tbody>
 					*/
-					m := getPage.FindAllStringSubmatch(string(body), -1)
+					m := getPostInfo.FindAllStringSubmatch(string(body), -1)
 
 					// 检查是否获取成功
 					if len(m) == 0 {
