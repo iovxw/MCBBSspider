@@ -55,3 +55,8 @@ type postInfo struct {
 	Body     string
 }
 ```
+
+下载
+----
+
+[![Gobuild Download](http://gobuild.io/badge/github.com/Bluek404/MCBBSspider/downloads.svg)](http://gobuild.io/github.com/Bluek404/MCBBSspider)
