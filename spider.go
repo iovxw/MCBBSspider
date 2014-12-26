@@ -93,12 +93,13 @@ func main() {
 	printInfo("本版块全部分页数量", maxPagesNum)
 
 	// 获取版块介绍
+	var forumIntroduction string
 	n = getForumIntroduction.FindSubmatch(body)
 	if len(n) == 0 {
-		printError("GetForumIntroduction", "获取版块介绍出错")
-		os.Exit(1)
+		printError("GetForumIntroduction", "获取版块介绍出错，版块介绍为空")
+	} else {
+		forumIntroduction = string(n[1])
 	}
-	forumIntroduction := string(n[1])
 
 	// 创建数据库
 	db, err := leveldb.OpenFile("db/"+fid, nil)
