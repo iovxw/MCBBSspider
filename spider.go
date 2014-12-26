@@ -10,7 +10,6 @@ import (
 	"os"
 	"regexp"
 	"strconv"
-	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -18,6 +17,8 @@ import (
 var (
 	// go的正则在匹配ReadAll出来的数据时有点奇怪，必须用[\w\W]{0,}?来代替\n
 
+	// 最大同时开启线程数
+	maxThread = 10
 	// 用于获取版块名称
 	getForumName = regexp.MustCompile(`<h1 class="xs2">[\w\W]{0,}?<a[^>]*>([^<]*)</a>`)
 	// 用于获取版块帖子分页数量
@@ -38,8 +39,11 @@ func main() {
 		return
 	}
 
+	printInfo("最大线程数量", maxThread)
+
 	// 论坛版块fid
 	fid := os.Args[1]
+	printInfo("版块FID", fid)
 
 	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=1")
 	if err != nil {
@@ -112,84 +116,102 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 用于等待全部线程执行完毕
-	var wg sync.WaitGroup
+	var done = make(chan int)
 	// 用于统计还有多少页未完成
-	var pageAmount int
-	// 获取每一页的所有帖子
-	for i := 0; i < maxPagesNum; i++ {
-		wg.Add(1)
-		pageAmount++
-		go func(page int) {
-			postList, err := getPagesList(fid, page)
-			if err != nil {
-				printError("getPagesList"+string(page), err)
-			} else {
-				// 获取每个帖子的内容
-				for i, v := range postList {
-					// for用于重试
-					for {
-						resp, err := http.Get("http://www.mcbbs.net/" + v.Url)
-						if err != nil {
-							printError("GetPost", err)
-						} else {
-							defer resp.Body.Close()
+	var pageAmount = maxPagesNum
 
-							// 检查服务器是否返回成功
-							if resp.StatusCode != 200 {
-								// 服务器错误
-								printError("GetPost.ServerError", "服务器错误，错误码：", resp.StatusCode)
-								if resp.StatusCode == 404 {
-									// 如果为404，则没有重试的必要，跳出重试
-									printError("GetPost.Retry", "帖子《"+v.Title+"》不存在")
-									break
-								}
+	getPage := func(page int) {
+		postList, err := getPagesList(fid, page)
+		if err != nil {
+			printError("getPagesList"+string(page), err)
+		} else {
+			// 获取每个帖子的内容
+			for i, v := range postList {
+				// for用于重试
+				for {
+					resp, err := http.Get("http://www.mcbbs.net/" + v.Url)
+					if err != nil {
+						printError("GetPost", err)
+					} else {
+						defer resp.Body.Close()
+
+						// 检查服务器是否返回成功
+						if resp.StatusCode != 200 {
+							// 服务器错误
+							printError("GetPost.ServerError", "服务器错误，错误码：", resp.StatusCode)
+							if resp.StatusCode == 404 {
+								// 如果为404，则没有重试的必要，跳出重试
+								printError("GetPost.Retry", "帖子《"+v.Title+"》不存在")
+								break
+							}
+						} else {
+							body, err := ioutil.ReadAll(resp.Body)
+							if err != nil {
+								printError("GetPost.ReadAll", err)
 							} else {
-								body, err := ioutil.ReadAll(resp.Body)
-								if err != nil {
-									printError("GetPost.ReadAll", err)
+								n := getPostBody.FindSubmatch(body)
+								// 检查是否获取body成功
+								if len(n) == 0 {
+									printError("GetPost.FindSubmatch", "未找到页面内文章部分")
 								} else {
-									n := getPostBody.FindSubmatch(body)
-									// 检查是否获取body成功
-									if len(n) == 0 {
-										printError("GetPost.FindSubmatch", "未找到页面内文章部分")
-									} else {
-										postBody := string(n[1])
-										// 存入Body
-										postList[i].Body = postBody
-										printInfo("GetPost", v.Title, "[OK]")
-										// 跳出循环重试
-										break
-									}
+									postBody := string(n[1])
+									// 存入Body
+									postList[i].Body = postBody
+									printInfo("GetPost", v.Title, "[OK]")
+									// 跳出循环重试
+									break
 								}
 							}
 						}
-						// 获取失败，重试
-						printError("GetPost.Retry", "获取帖子《"+v.Title+"》失败，正在重试")
 					}
+					// 获取失败，重试
+					printError("GetPost.Retry", "获取帖子《"+v.Title+"》失败，正在重试")
 				}
 			}
-			// 编码
-			byt, err := encode(postList)
-			if err != nil {
-				printError("Encode", err)
-				return
-			}
-			// 存入数据库
-			err = db.Put([]byte("page_"+strconv.Itoa(page)), byt, nil)
-			if err != nil {
-				printError("db.Put", err)
-				return
-			}
+		}
+		// 编码
+		byt, err := encode(postList)
+		if err != nil {
+			printError("Encode", err)
+			return
+		}
+		// 存入数据库
+		err = db.Put([]byte("page_"+strconv.Itoa(page)), byt, nil)
+		if err != nil {
+			printError("db.Put", err)
+			return
+		}
 
-			pageAmount--
+		pageAmount--
 
-			printInfo("OK", "线程", page, "执行完毕")
-			printInfo("OK", "版块分页", page, "中的所有帖子已经储存到本地，还有", pageAmount, "页正在下载中")
-			wg.Done()
-		}(i + 1)
+		printInfo("OK", "线程", page, "执行完毕")
+		printInfo("OK", "版块分页", page, "中的所有帖子已经储存到本地，还有", pageAmount, "页正在下载中")
+		done <- page
 	}
-	wg.Wait()
+
+	// 开启设置数量的线程
+	for i := 0; i < maxThread; i++ {
+		go getPage(i + 1)
+	}
+
+	// 用于统计已开启线程数
+	var i = maxThread
+
+	// 单个线程执行完毕，补充线程
+	// 使线程数量始终保持设置的最大数量
+	for {
+		// 等待线程完成
+		<-done
+		// 因为前面已经开启了maxThread个线程
+		// 但是没有返回maxThread个done
+		// 所以i最终会等于  maxThread + maxPagesNum
+		// 所以需要检查已完成页数是否超出总页数
+		if i <= maxPagesNum {
+			i++
+			// 开启新线程
+			go getPage(i)
+		}
+	}
 	printInfo("OK", "FID为", fid, "的版块中的所有帖子已储存到本地")
 }
 
