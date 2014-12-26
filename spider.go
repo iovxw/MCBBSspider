@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 
+	"flag"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -18,7 +19,7 @@ var (
 	// go的正则在匹配ReadAll出来的数据时有点奇怪，必须用[\w\W]{0,}?来代替\n
 
 	// 最大同时开启线程数
-	maxThread = 10
+	maxThread int
 	// 用于获取版块名称
 	getForumName = regexp.MustCompile(`<h1 class="xs2">[\w\W]{0,}?<a[^>]*>([^<]*)</a>`)
 	// 用于获取版块帖子分页数量
@@ -32,8 +33,14 @@ var (
 )
 
 func main() {
-	if len(os.Args) == 1 {
+	flag.IntVar(&maxThread, "m", 10, "最大线程数量")
+	flag.Parse()
+
+	if len(flag.Args()) == 0 {
 		fmt.Println("请在命令后添加论坛版块FID参数")
+		fmt.Println("例如：")
+		fmt.Println(os.Args[0] + " 45 -m=10")
+		fmt.Println("其中m为可选参数，用于设置最大线程数量")
 		fmt.Println("FID可从版块URL中寻找")
 		fmt.Println("数据会保存在db/FID路径中")
 		return
@@ -42,7 +49,7 @@ func main() {
 	printInfo("最大线程数量", maxThread)
 
 	// 论坛版块fid
-	fid := os.Args[1]
+	fid := flag.Arg(0)
 	printInfo("版块FID", fid)
 
 	resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=1")
