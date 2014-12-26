@@ -227,6 +227,9 @@ func main() {
 			if i <= maxPagesNum {
 				// 开启新线程
 				go getPage(i)
+			} else {
+				// 所有页面已下载完毕
+				break
 			}
 		}
 	}
