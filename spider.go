@@ -23,7 +23,7 @@ var (
 	// 用于获取版块名称
 	getForumName = regexp.MustCompile(`<h1 class="xs2">[\w\W]{0,}?<a[^>]*>([^<]*)</a>`)
 	// 用于获取版块帖子分页数量
-	getForumPageNumber = regexp.MustCompile(`<a href="[^"]+" class="last">\.\.\. ([0-9]+)</a>`)
+	getForumPageNumber = regexp.MustCompile(`<span title="共 ([0-9]+) 页">`)
 	// 用于获取版块介绍
 	getForumIntroduction = regexp.MustCompile(`<div id="forum_rules_[0-9]*"[^>]*>([\w\W]{0,}?)(?:</div>[\w\W]{0,}?){3}<div class="drag">`)
 	// 用于获取帖子信息
@@ -80,15 +80,17 @@ func main() {
 	printInfo("版块名称", forumName)
 
 	// 获取版块帖子分页数量
+	var maxPagesNum int
 	n = getForumPageNumber.FindSubmatch(body)
 	if len(n) == 0 {
-		printError("GetForumPageNumber", "获取版块分页数量出错")
-		os.Exit(1)
-	}
-	maxPagesNum, err := strconv.Atoi(string(n[1]))
-	if err != nil {
-		printError("Atoi", err)
-		os.Exit(1)
+		printError("GetForumPageNumber", "获取版块分页数量出错，只有一页")
+		maxPagesNum = 1
+	} else {
+		maxPagesNum, err = strconv.Atoi(string(n[1]))
+		if err != nil {
+			printError("Atoi", err)
+			os.Exit(1)
+		}
 	}
 	printInfo("本版块全部分页数量", maxPagesNum)
 
@@ -131,9 +133,10 @@ func main() {
 	getPage := func(page int) {
 		postList, err := getPagesList(fid, page)
 		if err != nil {
-			printError("getPagesList"+string(page), err)
+			printError("GetPagesList"+string(page), err)
 		} else {
 			// 获取每个帖子的内容
+			printInfo("GetPage", "开始获取版块分页", page, "内所有帖子，共", len(postList), "个帖子")
 			for i, v := range postList {
 				// for用于重试
 				for {
@@ -224,8 +227,10 @@ func main() {
 		// 所以i最终会等于  maxThread + maxPagesNum
 		// 所以需要检查已完成页数是否超出总页数
 		if i > maxPagesNum {
-			// 所有页面已下载完毕
-			break
+			if i-maxThread == maxPagesNum || i-maxThread == 0 {
+				// 所有页面已下载完毕
+				break
+			}
 		} else {
 			// 开启新线程
 			go getPage(i)
@@ -238,6 +243,7 @@ func main() {
 // 获取单页面的帖子列表
 func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 	for {
+		printInfo("GetPagesList", "开始下载版块分页", pageNum)
 		resp, err := http.Get("http://www.mcbbs.net/forum.php?mod=forumdisplay&fid=" + fid + "&orderby=dateline&page=" + strconv.Itoa(pageNum))
 		if err != nil {
 			printError("GetPageList", err)
@@ -287,7 +293,7 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 
 					// 检查是否获取成功
 					if len(m) == 0 {
-						printError("GetPageList.FindAllStringSubmatch", "未找到分页内帖子")
+						printError("GetPageList.FindAllStringSubmatch", "未找到分页", pageNum, "内帖子")
 						// 失败，跳出
 					} else {
 						// 处理单个帖子信息
@@ -307,6 +313,7 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 							}
 							pageList = append(pageList, postInf)
 						}
+						printInfo("OK", "版块分页", pageNum, "下载完成")
 					}
 					// 跳出重试
 					break
@@ -314,7 +321,7 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 			}
 		}
 		// 获取失败，重试
-		printError("getPageList", "获取版块分页", pageNum, "失败，正在重试")
+		printError("GetPageList", "获取版块分页", pageNum, "失败，正在重试")
 	}
 
 	return pageList, nil
