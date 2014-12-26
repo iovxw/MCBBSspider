@@ -217,12 +217,12 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 						<tbody id="normalthread_233212">
 						<tr>
 						<td class="icn">
-						<a href="thread-372516-1-1.html" title="有新回复 - 新窗口打开" target="_blank">
+						<a href="m[1]地址" title="有新回复 - 新窗口打开" target="_blank">
 						<img src="static/image/common/folder_new.gif" />
 						</a>
 						</td>
 						<th class="new">
-						<em>[<a href="forum.p899">m[1]分类</a>]</em> <a href="m[2]地址" style="" class="xst" >m[3]标题</a>
+						<em>[<a href="forum.p899">m[2]分类</a>]</em> <a href="" style="" class="xst" >m[3]标题</a>
 						<img src="static/image/filetype/image_s.gif" alt="attach_img" title="图片附件" align="absmiddle" />
 						<img src="template/mcbbs/img/mc_agree.gif" align="absmiddle" alt="agree" title="帖子被加分" />
 						<span class="tps">&nbsp;...<a href="">2</a><a href="">3</a><a href="html">4</a></span>
@@ -256,8 +256,8 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 							}
 							// 储存帖子信息
 							postInf := postInfo{
-								Category: v[1],
-								Url:      v[2],
+								Url:      v[1],
+								Category: v[2],
 								Title:    v[3],
 								Author:   v[4],
 								Date:     date,
