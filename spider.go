@@ -219,12 +219,12 @@ func main() {
 		for {
 			// 等待线程完成
 			<-done
+			i++
 			// 因为前面已经开启了maxThread个线程
 			// 但是没有返回maxThread个done
 			// 所以i最终会等于  maxThread + maxPagesNum
 			// 所以需要检查已完成页数是否超出总页数
 			if i <= maxPagesNum {
-				i++
 				// 开启新线程
 				go getPage(i)
 			}
