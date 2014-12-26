@@ -223,12 +223,12 @@ func main() {
 		// 但是没有返回maxThread个done
 		// 所以i最终会等于  maxThread + maxPagesNum
 		// 所以需要检查已完成页数是否超出总页数
-		if i <= maxPagesNum {
-			// 开启新线程
-			go getPage(i)
-		} else {
+		if i > maxPagesNum {
 			// 所有页面已下载完毕
 			break
+		} else {
+			// 开启新线程
+			go getPage(i)
 		}
 	}
 
