@@ -27,7 +27,7 @@ var (
 	// 用于获取版块介绍
 	getForumIntroduction = regexp.MustCompile(`<div id="forum_rules_[0-9]*"[^>]*>([\w\W]{0,}?)(?:</div>[\w\W]{0,}?){3}<div class="drag">`)
 	// 用于获取帖子信息
-	getPostInfo = regexp.MustCompile(`id="normalthread_[0-9]+"[\w\W]{0,}?class="icn"[\w\W]{0,}?href="([^"]*)"[\w\W]{0,}?<th class="\w*">\n<em>[\w\W]{0,}?>([^<]*)[\w\W]{0,}?class="xst" >([^<]*)[\w\W]{0,}?<cite>[\w\W]{0,}?>([^<]*)[\w\W]{0,}?<span>(?:<span title="([^"]*)">)?([^<]*)`)
+	getPostInfo = regexp.MustCompile(`id="normalthread_[0-9]+"[\w\W]{0,}?class="icn"[\w\W]{0,}?href="([^"]*)"[\w\W]{0,}?<th class="\w*">\n<em>[\w\W]{0,}?>([^<]*)[\w\W]{0,}?class="xst" >([^<]*)[\w\W]{0,}?<cite>[\w\W]{0,}?>([^<]*)[\w\W]{0,}?<span[\w\W]{0,}?>(?:<span title="([^"]*)">)?([^<]*)`)
 	// 用于获取帖子内容
 	getPostBody = regexp.MustCompile(`<div class="pcb">([\w\W]{0,}?)<div id="comment_[0-9]*" class="cm">`)
 )
