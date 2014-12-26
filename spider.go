@@ -215,7 +215,7 @@ func main() {
 
 	// 单个线程执行完毕，补充线程
 	// 使线程数量始终保持设置的最大数量
-	// 已经开启了maxThread个线程，所以还需要再开启maxPagesNum-maxThread个线程
+	// 已经开启了maxThread个线程，所以还需要再开启maxPagesNum - maxThread个线程
 	for i := 0; i < maxPagesNum-maxThread; i++ {
 		// 等待线程完成
 		<-done
@@ -224,6 +224,9 @@ func main() {
 	}
 
 	// 接受剩余线程的done
+	// 这里总共开启了maxPagesNum个线程
+	// 接受了maxPagesNum - maxThread个done
+	// 所以还需要接受maxThread个done
 	for i := 0; i < maxThread; i++ {
 		<-done
 	}
