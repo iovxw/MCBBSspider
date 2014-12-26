@@ -163,7 +163,7 @@ func main() {
 								n := getPostBody.FindSubmatch(body)
 								// 检查是否获取body成功
 								if len(n) == 0 {
-									printError("GetPost.FindSubmatch", "未找到页面内文章部分")
+									printError("GetPost.FindSubmatch", "未找到《"+v.Title+"》内文章部分")
 									// 获取失败，一般是帖子被屏蔽或者论坛数据库错误
 									break
 								} else {
@@ -213,28 +213,19 @@ func main() {
 		go getPage(i + 1)
 	}
 
-	// 用于统计已开启线程数
-	var i = maxThread
-
 	// 单个线程执行完毕，补充线程
 	// 使线程数量始终保持设置的最大数量
-	for {
+	// 已经开启了maxThread个线程，所以还需要再开启maxPagesNum-maxThread个线程
+	for i := 0; i < maxPagesNum-maxThread; i++ {
 		// 等待线程完成
 		<-done
-		// 因为前面已经开启了maxThread个线程
-		// 但是没有返回maxThread个done
-		// 所以i最终会等于  maxThread + maxPagesNum
-		// 所以需要检查已完成页数是否超出总页数
-		if i > maxPagesNum {
-			if i-maxThread == maxPagesNum || i-maxThread == 0 {
-				// 所有页面已下载完毕
-				break
-			}
-		} else {
-			// 开启新线程
-			go getPage(i)
-			i++
-		}
+		// 开启新线程
+		go getPage(maxThread + i)
+	}
+
+	// 接受剩余线程的done
+	for i := 0; i < maxThread; i++ {
+		<-done
 	}
 
 	printInfo("OK", "FID为", fid, "的版块中的所有帖子已储存到本地")
