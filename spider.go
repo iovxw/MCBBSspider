@@ -160,6 +160,8 @@ func main() {
 								// 检查是否获取body成功
 								if len(n) == 0 {
 									printError("GetPost.FindSubmatch", "未找到页面内文章部分")
+									// 获取失败，一般是帖子被屏蔽或者论坛数据库错误
+									break
 								} else {
 									postBody := string(n[1])
 									// 存入Body
@@ -275,6 +277,7 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 					// 检查是否获取成功
 					if len(m) == 0 {
 						printError("GetPageList.FindAllStringSubmatch", "未找到分页内帖子")
+						// 失败，跳出
 					} else {
 						// 处理单个帖子信息
 						for _, v := range m {
@@ -293,9 +296,9 @@ func getPagesList(fid string, pageNum int) (pageList []postInfo, err error) {
 							}
 							pageList = append(pageList, postInf)
 						}
-						// 跳出重试
-						break
 					}
+					// 跳出重试
+					break
 				}
 			}
 		}
